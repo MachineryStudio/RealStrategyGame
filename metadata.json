@@ -1,0 +1,6 @@
+{
+  "name": "LIGHTHOUSE 橋 - Constructa",
+  "description": "A 3D city-building survival simulation game where players construct cities, manage resources, defend against disasters and hostile forces, and import custom 3D models.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
