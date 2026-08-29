@@ -37,11 +37,11 @@ interface WorkshopInspectorModalProps {
 
 export const WorkshopInspectorModal: React.FC<WorkshopInspectorModalProps> = ({
   buildingInstanceId,
-  buildings,
-  definitions,
-  units,
-  resources,
-  isGodMode,
+  buildings = [],
+  definitions = [],
+  units = [],
+  resources = { money: 0, wood: 0, steel: 0, concrete: 0, glass: 0, electronics: 0 },
+  isGodMode = false,
   onClose,
   onAssignWorker,
   onUnassignWorker,
@@ -49,22 +49,27 @@ export const WorkshopInspectorModal: React.FC<WorkshopInspectorModalProps> = ({
 }) => {
   if (!buildingInstanceId) return null;
 
-  const building = buildings.find((b) => b.instanceId === buildingInstanceId);
+  const buildingList = buildings || [];
+  const defList = definitions || [];
+  const unitList = units || [];
+
+  const building = buildingList.find((b) => b && b.instanceId === buildingInstanceId);
   if (!building) return null;
 
-  const def = definitions.find((d) => d.id === building.defId);
+  const def = defList.find((d) => d && d.id === building.defId);
   if (!def) return null;
 
-  const assignedWorkers = units.filter(
+  const assignedWorkers = unitList.filter(
     (u) =>
+      u &&
       u.type === 'worker' &&
       (u.targetBuildingId === building.instanceId ||
         (u.orderType === 'work_harvest' &&
           Math.hypot(u.x - building.gridX * 2, u.z - building.gridZ * 2) < 3.5))
   );
 
-  const idleWorkers = units.filter(
-    (u) => u.type === 'worker' && u.state === 'idle' && !u.targetBuildingId
+  const idleWorkers = unitList.filter(
+    (u) => u && u.type === 'worker' && u.state === 'idle' && !u.targetBuildingId
   ).length;
 
   const cycleTime = def.productionInterval || 12;

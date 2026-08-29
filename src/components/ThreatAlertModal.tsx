@@ -18,12 +18,12 @@ import {
 } from 'lucide-react';
 
 interface ThreatAlertBannerProps {
-  threats: ThreatEntity[];
+  threats?: ThreatEntity[];
   onDeploy: (type: 'fire_truck' | 'police' | 'engineer' | 'military' | 'medic' | 'dog' | 'cat' | 'robot') => void;
 }
 
-export const ThreatAlertBanner: React.FC<ThreatAlertBannerProps> = ({ threats, onDeploy }) => {
-  const activeThreats = threats.filter((t) => t.active);
+export const ThreatAlertBanner: React.FC<ThreatAlertBannerProps> = ({ threats = [], onDeploy }) => {
+  const activeThreats = (threats || []).filter((t) => t && t.active);
   if (activeThreats.length === 0) return null;
 
   const currentThreat = activeThreats[0];
@@ -67,7 +67,7 @@ export const ThreatAlertBanner: React.FC<ThreatAlertBannerProps> = ({ threats, o
               </span>
             </div>
             <div className="text-[11px] text-slate-300/80 font-mono">
-              HP: {Math.max(0, Math.round(currentThreat.hp))}/{currentThreat.maxHp} &bull; Category: {currentThreat.category.toUpperCase()}
+              HP: {Math.max(0, Math.round(currentThreat.hp ?? 100))}/{currentThreat.maxHp ?? 100} &bull; Category: {(currentThreat.category || 'Hazard').toUpperCase()}
             </div>
           </div>
         </div>

@@ -133,7 +133,7 @@ export interface ThreatEntity {
 
 export type PetType = 'dog' | 'cat' | 'robot';
 
-export type CounterMeasureType = 'fire_truck' | 'police' | 'engineer' | 'military' | 'medic' | 'nurse' | PetType;
+export type CounterMeasureType = 'fire_truck' | 'police' | 'engineer' | 'architect' | 'military' | 'medic' | 'nurse' | 'veterinarian' | PetType;
 
 export type ResourceNodeType = 'wood' | 'steel' | 'concrete';
 

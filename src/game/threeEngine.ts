@@ -791,6 +791,91 @@ export class ThreeEngine {
       } else {
         mesh.rotation.z = 0;
       }
+
+      // 1. Building Fire & Smoke Particles when damaged
+      const isDamaged = b.hp < b.maxHp * 0.8 || b.isOnFire;
+      let fireGroup = mesh.getObjectByName('building_fire_particles');
+      if (isDamaged && b.isConstructed) {
+        if (!fireGroup) {
+          fireGroup = new THREE.Group();
+          fireGroup.name = 'building_fire_particles';
+          const bldHeight = (def as any).height || 3.5;
+          fireGroup.position.y = bldHeight * 0.5;
+
+          // Animated flame tongues
+          for (let f = 0; f < 3; f++) {
+            const flame = new THREE.Mesh(
+              new THREE.ConeGeometry(0.45, 1.6, 6),
+              new THREE.MeshBasicMaterial({ color: f === 0 ? 0xef4444 : f === 1 ? 0xf97316 : 0xfacc15, transparent: true, opacity: 0.9 })
+            );
+            flame.name = `flame_${f}`;
+            flame.position.set((f - 1) * 0.6, 0.4, (Math.random() - 0.5) * 0.8);
+            fireGroup.add(flame);
+          }
+
+          const smoke = new THREE.Mesh(
+            new THREE.DodecahedronGeometry(0.7),
+            new THREE.MeshBasicMaterial({ color: 0x334155, transparent: true, opacity: 0.55 })
+          );
+          smoke.name = 'smoke_puff';
+          smoke.position.set(0, 1.4, 0);
+          fireGroup.add(smoke);
+
+          mesh.add(fireGroup);
+        }
+      } else if (fireGroup) {
+        mesh.remove(fireGroup);
+      }
+
+      // 2. Overhead In-World Billboard Health Bar for damaged buildings or Citadel
+      let bldHb = mesh.getObjectByName('bld_health_bar');
+      const isCitadel = b.defId === 'mon_kingdom_house';
+      const showHb = b.hp < b.maxHp || isCitadel;
+
+      if (showHb) {
+        const bldHeight = isCitadel ? 12 : ((def as any).height || 3.5);
+        if (!bldHb) {
+          bldHb = new THREE.Group();
+          bldHb.name = 'bld_health_bar';
+          bldHb.position.y = bldHeight + 1.6;
+
+          const barWidth = isCitadel ? 4.8 : 2.6;
+          const barHeight = isCitadel ? 0.46 : 0.28;
+
+          const bgBar = new THREE.Mesh(
+            new THREE.PlaneGeometry(barWidth, barHeight),
+            new THREE.MeshBasicMaterial({ color: 0x090d16, side: THREE.DoubleSide })
+          );
+          bldHb.add(bgBar);
+
+          const fgBar = new THREE.Mesh(
+            new THREE.PlaneGeometry(barWidth * 0.96, barHeight * 0.76),
+            new THREE.MeshBasicMaterial({
+              color: isCitadel ? 0xf59e0b : 0x22c55e,
+              side: THREE.DoubleSide,
+            })
+          );
+          fgBar.name = 'fg_bld_health';
+          fgBar.position.z = 0.01;
+          bldHb.add(fgBar);
+
+          mesh.add(bldHb);
+        }
+
+        const fg = bldHb.getObjectByName('fg_bld_health') as THREE.Mesh;
+        if (fg) {
+          const hpPct = Math.max(0, Math.min(1, b.hp / b.maxHp));
+          fg.scale.x = hpPct;
+          const barWidth = isCitadel ? 4.8 : 2.6;
+          fg.position.x = (hpPct - 1) * (barWidth * 0.48);
+          const mat = fg.material as THREE.MeshBasicMaterial;
+          if (hpPct > 0.5) mat.color.setHex(isCitadel ? 0xf59e0b : 0x22c55e);
+          else if (hpPct > 0.25) mat.color.setHex(0xeab308);
+          else mat.color.setHex(0xef4444);
+        }
+      } else if (bldHb) {
+        mesh.remove(bldHb);
+      }
     });
   }
 
@@ -1584,7 +1669,8 @@ export class ThreeEngine {
         this.threatManager.threats,
         (threatId, dmg) => {
           this.threatManager.damageThreat(threatId, dmg);
-        }
+        },
+        this.placedBuildingsCache
       );
     }
 
@@ -1631,6 +1717,29 @@ export class ThreeEngine {
 
     // 4. Animate Lighthouse Beams, Workshops, & Special mesh features
     for (const mesh of this.buildingMeshes.values()) {
+      // Animate building billboard health bar orientation
+      const bldHb = mesh.getObjectByName('bld_health_bar');
+      if (bldHb) {
+        bldHb.quaternion.copy(this.camera.quaternion);
+      }
+
+      // Animate fire and smoke particles
+      const fireParticles = mesh.getObjectByName('building_fire_particles');
+      if (fireParticles) {
+        for (let f = 0; f < 3; f++) {
+          const flame = fireParticles.getObjectByName(`flame_${f}`);
+          if (flame) {
+            flame.scale.y = 0.8 + Math.sin(now * 0.012 + f * 1.5) * 0.4;
+            flame.scale.x = 0.9 + Math.cos(now * 0.015 + f) * 0.3;
+          }
+        }
+        const smoke = fireParticles.getObjectByName('smoke_puff');
+        if (smoke) {
+          smoke.position.y = 1.3 + Math.sin(now * 0.003) * 0.3;
+          smoke.rotation.y += delta * 0.5;
+        }
+      }
+
       const beam = mesh.getObjectByName('lighthouse_beam');
       if (beam) {
         beam.rotation.y += delta * 1.5;

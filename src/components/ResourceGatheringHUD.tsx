@@ -49,10 +49,10 @@ interface ResourceGatheringHUDProps {
 }
 
 export const ResourceGatheringHUD: React.FC<ResourceGatheringHUDProps> = ({
-  buildings,
-  definitions,
-  units,
-  resources,
+  buildings = [],
+  definitions = [],
+  units = [],
+  resources = { money: 0, wood: 0, steel: 0, concrete: 0, glass: 0, electronics: 0 },
   resourceNodes = [],
   avatarCargo = { wood: 0, steel: 0, concrete: 0, maxCapacity: 25 },
   kingdomStats = {
@@ -79,17 +79,24 @@ export const ResourceGatheringHUD: React.FC<ResourceGatheringHUDProps> = ({
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'kingdom' | 'workshops' | 'environment'>('kingdom');
 
+  const buildingList = buildings || [];
+  const defList = definitions || [];
+  const unitList = units || [];
+  const nodeList = resourceNodes || [];
+
   // Filter kingdom house building & workshop buildings
-  const kingdomHouse = buildings.find((b) => b.defId === 'mon_kingdom_house');
-  const workshops = buildings.filter((b) => {
-    const def = definitions.find((d) => d.id === b.defId);
+  const kingdomHouse = buildingList.find((b) => b && b.defId === 'mon_kingdom_house');
+  const workshops = buildingList.filter((b) => {
+    if (!b) return false;
+    const def = defList.find((d) => d && d.id === b.defId);
     return def && def.category === 'workshops';
   });
 
   // Calculate worker assignments for workshops
   const getAssignedWorkersCount = (bld: PlacedBuilding) => {
-    return units.filter(
+    return unitList.filter(
       (u) =>
+        u &&
         u.type === 'worker' &&
         (u.targetBuildingId === bld.instanceId ||
           (u.orderType === 'work_harvest' &&
@@ -99,17 +106,19 @@ export const ResourceGatheringHUD: React.FC<ResourceGatheringHUDProps> = ({
 
   // Calculate worker assignments for natural resource nodes
   const getNodeWorkersCount = (nodeId: string) => {
-    return units.filter(
+    return unitList.filter(
       (u) =>
+        u &&
         u.type === 'worker' &&
         (u.targetNodeId === nodeId ||
           (u.orderType === 'gather_node' && u.targetNodeId === nodeId))
     ).length;
   };
 
-  const totalWorkers = units.filter((u) => u.type === 'worker').length;
-  const idleWorkers = units.filter(
+  const totalWorkers = unitList.filter((u) => u && u.type === 'worker').length;
+  const idleWorkers = unitList.filter(
     (u) =>
+      u &&
       u.type === 'worker' &&
       u.state === 'idle' &&
       !u.targetBuildingId &&
@@ -123,8 +132,8 @@ export const ResourceGatheringHUD: React.FC<ResourceGatheringHUDProps> = ({
   let concretePerMin = 0;
 
   workshops.forEach((bld) => {
-    if (!bld.isConstructed) return;
-    const def = definitions.find((d) => d.id === bld.defId);
+    if (!bld || !bld.isConstructed) return;
+    const def = defList.find((d) => d && d.id === bld.defId);
     if (!def || !def.outputResource) return;
     const assigned = getAssignedWorkersCount(bld);
     if (assigned === 0) return;
@@ -138,7 +147,7 @@ export const ResourceGatheringHUD: React.FC<ResourceGatheringHUDProps> = ({
   });
 
   // Count active environment nodes by type
-  const activeNodes = resourceNodes.filter((n) => !n.isDepleted);
+  const activeNodes = nodeList.filter((n) => n && !n.isDepleted);
   const woodNodes = activeNodes.filter((n) => n.type === 'wood');
   const steelNodes = activeNodes.filter((n) => n.type === 'steel');
   const concreteNodes = activeNodes.filter((n) => n.type === 'concrete');

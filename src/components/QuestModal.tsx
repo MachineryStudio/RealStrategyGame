@@ -23,22 +23,25 @@ import {
 
 interface QuestModalProps {
   isOpen: boolean;
-  quests: Quest[];
-  achievements: Achievement[];
+  quests?: Quest[];
+  achievements?: Achievement[];
   onClose: () => void;
   onClaimReward: (quest: Quest) => void;
 }
 
 export const QuestModal: React.FC<QuestModalProps> = ({
   isOpen,
-  quests,
-  achievements,
+  quests = [],
+  achievements = [],
   onClose,
   onClaimReward,
 }) => {
   const [activeTab, setActiveTab] = useState<'quests' | 'achievements'>('quests');
 
   if (!isOpen) return null;
+
+  const questList = quests || [];
+  const achievementList = achievements || [];
 
   const renderIcon = (iconName: string) => {
     switch (iconName) {
@@ -83,7 +86,7 @@ export const QuestModal: React.FC<QuestModalProps> = ({
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            Active Missions ({quests.filter((q) => !q.claimed).length})
+            Active Missions ({questList.filter((q) => q && !q.claimed).length})
           </button>
           <button
             onClick={() => setActiveTab('achievements')}
@@ -93,14 +96,14 @@ export const QuestModal: React.FC<QuestModalProps> = ({
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            Badges & Trophies ({achievements.filter((a) => a.unlocked).length}/{achievements.length})
+            Badges & Trophies ({achievementList.filter((a) => a && a.unlocked).length}/{achievementList.length})
           </button>
         </div>
 
         {/* Tab Content */}
         <div className="p-5 overflow-y-auto flex flex-col gap-3">
           {activeTab === 'quests' ? (
-            quests.map((quest) => {
+            questList.map((quest) => {
               const isReadyToClaim = quest.completed && !quest.claimed;
               const pct = Math.min(100, Math.round((quest.progress / quest.target) * 100));
 
@@ -168,7 +171,7 @@ export const QuestModal: React.FC<QuestModalProps> = ({
             })
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {achievements.map((ach) => (
+              {achievementList.map((ach) => (
                 <div
                   key={ach.id}
                   className={`p-3.5 rounded-xl border flex items-start gap-3 transition-all ${

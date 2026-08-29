@@ -40,6 +40,18 @@ export class WorkerManager {
       name = 'Civil Engineer / Worker';
       hp = 120;
       speed = 4.2;
+    } else if (type === 'nurse') {
+      name = 'Field Response Nurse';
+      speed = 4.8;
+      hp = 160;
+    } else if (type === 'veterinarian') {
+      name = 'Harbor Veterinarian';
+      speed = 5.0;
+      hp = 170;
+    } else if (type === 'architect') {
+      name = 'Master Architect';
+      speed = 4.6;
+      hp = 180;
     } else if (type === 'dog') {
       name = 'Guard Dog (Vigilant Pet)';
       speed = 6.2;
@@ -386,12 +398,24 @@ export class WorkerManager {
       let hasTool = true;
       let toolColor = 0x78716c;
 
-      if (unit.type === 'engineer') {
-        outfitColor = 0x0284c7; // Blue architect
+      if (unit.type === 'nurse') {
+        outfitColor = 0xf43f5e; // Rose / White Nurse uniform
+        hatColor = 0xffffff; // White Nurse Cap with red cross
+        hasHat = true;
+        hasTool = true;
+        toolColor = 0x10b981; // Medical kit / injector
+      } else if (unit.type === 'veterinarian') {
+        outfitColor = 0x0d9488; // Teal Clinical Veterinarian coat
+        hatColor = 0x14b8a6;
+        hasHat = true;
+        hasTool = true;
+        toolColor = 0x06b6d4; // Stethoscope & scanner
+      } else if (unit.type === 'architect' || unit.type === 'engineer') {
+        outfitColor = 0x0284c7; // Deep Blue Architect attire
         hatColor = 0xffffff;
         hasHat = true;
         hasTool = true;
-        toolColor = 0x38bdf8;
+        toolColor = 0xf59e0b; // Laser welding torch & blueprint
       } else if (unit.type === 'medic') {
         outfitColor = 0x10b981; // Green medic
         hatColor = 0xffffff;
@@ -746,6 +770,27 @@ export class WorkerManager {
       }
     }
 
+    // 4. Overhead In-World Billboard Health Bar
+    const hbGroup = new THREE.Group();
+    hbGroup.name = 'unit_health_bar';
+    hbGroup.position.y = isVehicle ? 2.8 : isPet ? 1.4 : 2.3;
+
+    const bgBar = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.6, 0.22),
+      new THREE.MeshBasicMaterial({ color: 0x090d16, side: THREE.DoubleSide })
+    );
+    hbGroup.add(bgBar);
+
+    const fgBar = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.52, 0.16),
+      new THREE.MeshBasicMaterial({ color: 0x22c55e, side: THREE.DoubleSide })
+    );
+    fgBar.name = 'fg_unit_health';
+    fgBar.position.z = 0.01;
+    hbGroup.add(fgBar);
+
+    rootGroup.add(hbGroup);
+
     return rootGroup;
   }
 
@@ -966,7 +1011,8 @@ export class WorkerManager {
     delta: number,
     underConstructionBuildings: PlacedBuilding[],
     threats: ThreatEntity[],
-    onThreatDamaged: (threatId: string, dmg: number) => void
+    onThreatDamaged: (threatId: string, dmg: number) => void,
+    allBuildings: PlacedBuilding[] = underConstructionBuildings
   ) {
     const now = Date.now();
     const timeSec = now * 0.001;
@@ -989,7 +1035,123 @@ export class WorkerManager {
 
       // 1. Autonomous AI behavior (Only if NOT in manual order)
       if (!unit.manualOrder) {
-        if (unit.type === 'worker') {
+        if (unit.type === 'nurse' || unit.type === 'medic') {
+          // --- FIELD NURSE AI: HEALS INJURED WORKERS & CITIZENS ---
+          let mostInjuredWorker: UnitEntity | null = null;
+          let lowestHpPct = 0.99;
+
+          for (const other of this.units) {
+            if (other.id === unit.id) continue;
+            if (other.type === 'worker' || other.type === 'nurse' || other.type === 'veterinarian' || other.type === 'architect' || other.type === 'citizen' || other.type === 'medic' || other.type === 'engineer') {
+              const pct = other.hp / other.maxHp;
+              if (pct < lowestHpPct) {
+                lowestHpPct = pct;
+                mostInjuredWorker = other;
+              }
+            }
+          }
+
+          if (mostInjuredWorker) {
+            unit.targetX = mostInjuredWorker.x;
+            unit.targetZ = mostInjuredWorker.z;
+            const dist = Math.hypot(mostInjuredWorker.x - unit.x, mostInjuredWorker.z - unit.z);
+            if (dist <= 2.2) {
+              unit.state = 'healing';
+              mostInjuredWorker.hp = Math.min(mostInjuredWorker.maxHp, mostInjuredWorker.hp + 35 * delta);
+              if (now % 1600 < 50 && Math.random() < 0.3) {
+                soundManager.playHealSound();
+              }
+            } else {
+              unit.state = 'walking';
+            }
+          } else {
+            // Patrol near Citadel
+            const patrolAngle = timeSec * 0.5 + seed;
+            unit.targetX = this.kingdomHouseCoords.x + Math.cos(patrolAngle) * 4.0;
+            unit.targetZ = this.kingdomHouseCoords.z + Math.sin(patrolAngle) * 4.0;
+          }
+        } else if (unit.type === 'veterinarian') {
+          // --- VETERINARIAN AI: HEALS INJURED PETS (DOGS, CATS, ROBOTS) ---
+          let mostInjuredPet: UnitEntity | null = null;
+          let lowestPetHpPct = 0.99;
+
+          for (const other of this.units) {
+            if (other.id === unit.id) continue;
+            if (other.type === 'dog' || other.type === 'cat' || other.type === 'robot') {
+              const pct = other.hp / other.maxHp;
+              if (pct < lowestPetHpPct) {
+                lowestPetHpPct = pct;
+                mostInjuredPet = other;
+              }
+            }
+          }
+
+          if (mostInjuredPet) {
+            unit.targetX = mostInjuredPet.x;
+            unit.targetZ = mostInjuredPet.z;
+            const dist = Math.hypot(mostInjuredPet.x - unit.x, mostInjuredPet.z - unit.z);
+            if (dist <= 2.2) {
+              unit.state = 'healing';
+              mostInjuredPet.hp = Math.min(mostInjuredPet.maxHp, mostInjuredPet.hp + 45 * delta);
+              if (now % 1600 < 50 && Math.random() < 0.3) {
+                soundManager.playHealSound();
+              }
+            } else {
+              unit.state = 'walking';
+            }
+          } else {
+            // Patrol near Citadel
+            const patrolAngle = timeSec * 0.5 + seed * 2;
+            unit.targetX = this.kingdomHouseCoords.x + Math.cos(patrolAngle) * 5.0;
+            unit.targetZ = this.kingdomHouseCoords.z + Math.sin(patrolAngle) * 5.0;
+          }
+        } else if (unit.type === 'architect' || unit.type === 'engineer') {
+          // --- ARCHITECT AI: REPAIRS DAMAGED BUILDINGS & CITADEL ---
+          let damagedBld: PlacedBuilding | null = null;
+          let lowestBldPct = 0.99;
+
+          for (const b of allBuildings) {
+            if (!b.isConstructed) continue;
+            const pct = b.hp / b.maxHp;
+            if (pct < lowestBldPct) {
+              lowestBldPct = pct;
+              damagedBld = b;
+            }
+          }
+
+          if (damagedBld) {
+            const bldX = damagedBld.gridX * 2;
+            const bldZ = damagedBld.gridZ * 2;
+            unit.targetX = bldX + Math.cos(seed) * 2.0;
+            unit.targetZ = bldZ + Math.sin(seed) * 2.0;
+            const isCitadel = damagedBld.defId === 'mon_kingdom_house';
+            const distThreshold = isCitadel ? 5.2 : 3.2;
+            const dist = Math.hypot(bldX - unit.x, bldZ - unit.z);
+
+            if (dist <= distThreshold) {
+              unit.state = 'working';
+              damagedBld.hp = Math.min(damagedBld.maxHp, damagedBld.hp + 50 * delta);
+              damagedBld.isOnFire = false;
+              if (now % 1500 < 50 && Math.random() < 0.3) {
+                soundManager.playRepairSound();
+              }
+            } else {
+              unit.state = 'walking';
+            }
+          } else if (underConstructionBuildings.length > 0) {
+            // Assist with construction
+            const target = underConstructionBuildings[i % underConstructionBuildings.length];
+            unit.orderType = 'build';
+            unit.targetBuildingId = target.instanceId;
+            unit.targetX = target.gridX * 2 + Math.cos(seed) * 2.0;
+            unit.targetZ = target.gridZ * 2 + Math.sin(seed) * 2.0;
+          } else {
+            // Rest near Citadel
+            const patrolAngle = timeSec * 0.4 + seed;
+            unit.targetX = this.kingdomHouseCoords.x + Math.cos(patrolAngle) * 3.5;
+            unit.targetZ = this.kingdomHouseCoords.z + Math.sin(patrolAngle) * 3.5;
+          }
+        } else if (unit.type === 'worker') {
           // Check if the Citadel structure is under construction
           const citadelUnderConstruction = underConstructionBuildings.find(
             (b) => b.defId === 'mon_kingdom_house' && !b.isConstructed
@@ -1662,7 +1824,41 @@ export class WorkerManager {
           }
         }
       }
+
+      // 4. Update Overhead In-World Billboard Health Bar
+      const hb = mesh.getObjectByName('unit_health_bar');
+      if (hb) {
+        hb.quaternion.copy((this.scene as any).cameraQuaternion || hb.quaternion);
+        const fg = hb.getObjectByName('fg_unit_health') as THREE.Mesh;
+        if (fg) {
+          const hpPct = Math.max(0, Math.min(1, unit.hp / unit.maxHp));
+          fg.scale.x = hpPct;
+          fg.position.x = (hpPct - 1) * 0.76;
+          const mat = fg.material as THREE.MeshBasicMaterial;
+          if (hpPct > 0.5) mat.color.setHex(0x22c55e);
+          else if (hpPct > 0.25) mat.color.setHex(0xf59e0b);
+          else mat.color.setHex(0xef4444);
+        }
+      }
     }
+  }
+
+  public damageUnit(unitId: string, amount: number): boolean {
+    const idx = this.units.findIndex((u) => u.id === unitId);
+    if (idx === -1) return false;
+    const unit = this.units[idx];
+    unit.hp = Math.max(0, unit.hp - amount);
+    if (unit.hp <= 0) {
+      const mesh = this.unitMeshes.get(unit.id);
+      if (mesh) this.scene.remove(mesh);
+      this.unitMeshes.delete(unit.id);
+      this.units.splice(idx, 1);
+      this.walkPhaseMap.delete(unit.id);
+      this.animSeedMap.delete(unit.id);
+      soundManager.playExplosion();
+      return true; // killed
+    }
+    return false;
   }
 
   public clearAll() {

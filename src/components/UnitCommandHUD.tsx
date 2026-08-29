@@ -37,8 +37,8 @@ interface UnitCommandHUDProps {
 }
 
 export const UnitCommandHUD: React.FC<UnitCommandHUDProps> = ({
-  selectedUnits,
-  allUnits,
+  selectedUnits = [],
+  allUnits = [],
   onSelectUnit,
   onSelectAllOfType,
   onSelectAll,
@@ -49,6 +49,8 @@ export const UnitCommandHUD: React.FC<UnitCommandHUDProps> = ({
   marqueeRect,
 }) => {
   const [showRecruitPopover, setShowRecruitPopover] = useState(false);
+  const unitsList = allUnits || [];
+  const selectedList = selectedUnits || [];
 
   const getUnitIcon = (type: string) => {
     switch (type) {
@@ -96,7 +98,11 @@ export const UnitCommandHUD: React.FC<UnitCommandHUDProps> = ({
     }
   };
 
-  const primaryUnit = selectedUnits[0];
+  const primaryUnit = selectedList[0];
+  const primaryHp = primaryUnit?.hp ?? 100;
+  const primaryMaxHp = primaryUnit?.maxHp ?? 100;
+  const totalHp = selectedList.reduce((acc, u) => acc + Math.round(u?.hp ?? 0), 0);
+  const totalMaxHp = Math.max(1, selectedList.reduce((a, b) => a + (b?.maxHp ?? 100), 0));
 
   return (
     <>
@@ -120,7 +126,7 @@ export const UnitCommandHUD: React.FC<UnitCommandHUDProps> = ({
       )}
 
       {/* 2. RTS Command Bar (Active when units are selected) */}
-      {selectedUnits.length > 0 && (
+      {selectedList.length > 0 && primaryUnit && (
         <div
           id="rts_unit_command_bar"
           className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 w-[95%] max-w-3xl bg-slate-950/90 border border-cyan-500/40 rounded-xl p-3 shadow-2xl backdrop-blur-md transition-all duration-200 text-slate-100"
@@ -130,7 +136,7 @@ export const UnitCommandHUD: React.FC<UnitCommandHUDProps> = ({
             <div className="flex items-center space-x-2">
               <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
               <span className="text-xs font-bold uppercase tracking-wider text-cyan-300">
-                TACTICAL COMMAND &bull; {selectedUnits.length} {selectedUnits.length === 1 ? 'UNIT' : 'UNITS'} SELECTED
+                TACTICAL COMMAND &bull; {selectedList.length} {selectedList.length === 1 ? 'UNIT' : 'UNITS'} SELECTED
               </span>
             </div>
 
@@ -159,7 +165,7 @@ export const UnitCommandHUD: React.FC<UnitCommandHUDProps> = ({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold truncate text-slate-100">
-                    {selectedUnits.length === 1 ? primaryUnit.name : `${selectedUnits.length} Units Group`}
+                    {selectedList.length === 1 ? primaryUnit.name : `${selectedList.length} Units Group`}
                   </h4>
                   <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-700/50">
                     {primaryUnit.state}
@@ -171,9 +177,9 @@ export const UnitCommandHUD: React.FC<UnitCommandHUDProps> = ({
                   <div className="flex justify-between text-[11px] text-slate-400 font-mono">
                     <span>Integrity</span>
                     <span>
-                      {selectedUnits.length === 1
-                        ? `${Math.round(primaryUnit.hp)} / ${primaryUnit.maxHp}`
-                        : `${selectedUnits.reduce((acc, u) => acc + Math.round(u.hp), 0)} Total HP`}
+                      {selectedList.length === 1
+                        ? `${Math.round(primaryHp)} / ${primaryMaxHp}`
+                        : `${totalHp} Total HP`}
                     </span>
                   </div>
                   <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
@@ -181,11 +187,9 @@ export const UnitCommandHUD: React.FC<UnitCommandHUDProps> = ({
                       className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-300"
                       style={{
                         width: `${
-                          selectedUnits.length === 1
-                            ? (primaryUnit.hp / primaryUnit.maxHp) * 100
-                            : (selectedUnits.reduce((a, b) => a + b.hp, 0) /
-                                selectedUnits.reduce((a, b) => a + b.maxHp, 0)) *
-                              100
+                          selectedList.length === 1
+                            ? (primaryHp / primaryMaxHp) * 100
+                            : (totalHp / totalMaxHp) * 100
                         }%`,
                       }}
                     />
@@ -196,7 +200,7 @@ export const UnitCommandHUD: React.FC<UnitCommandHUDProps> = ({
 
             {/* Middle: Selection Roster Chips (if multiple units) */}
             <div className="md:col-span-4 flex flex-wrap gap-1.5 max-h-16 overflow-y-auto pr-1">
-              {selectedUnits.map((u) => (
+              {selectedList.map((u) => (
                 <button
                   key={u.id}
                   id={`btn_unit_chip_${u.id}`}
@@ -251,7 +255,7 @@ export const UnitCommandHUD: React.FC<UnitCommandHUDProps> = ({
           title="Select all construction workers"
         >
           <Hammer className="w-3.5 h-3.5" />
-          <span className="font-medium">Workers ({allUnits.filter((u) => u.type === 'worker').length})</span>
+          <span className="font-medium">Workers ({unitsList.filter((u) => u && u.type === 'worker').length})</span>
         </button>
 
         <button
@@ -261,7 +265,7 @@ export const UnitCommandHUD: React.FC<UnitCommandHUDProps> = ({
           title="Select all guard dogs"
         >
           <Dog className="w-3.5 h-3.5" />
-          <span className="font-medium">Dogs ({allUnits.filter((u) => u.type === 'dog').length})</span>
+          <span className="font-medium">Dogs ({unitsList.filter((u) => u && u.type === 'dog').length})</span>
         </button>
 
         <button
@@ -271,7 +275,7 @@ export const UnitCommandHUD: React.FC<UnitCommandHUDProps> = ({
           title="Select all sentinel cats"
         >
           <Cat className="w-3.5 h-3.5" />
-          <span className="font-medium">Cats ({allUnits.filter((u) => u.type === 'cat').length})</span>
+          <span className="font-medium">Cats ({unitsList.filter((u) => u && u.type === 'cat').length})</span>
         </button>
 
         <button
@@ -281,7 +285,7 @@ export const UnitCommandHUD: React.FC<UnitCommandHUDProps> = ({
           title="Select all defense sentinel bots"
         >
           <Bot className="w-3.5 h-3.5" />
-          <span className="font-medium">Bots ({allUnits.filter((u) => u.type === 'robot').length})</span>
+          <span className="font-medium">Bots ({unitsList.filter((u) => u && u.type === 'robot').length})</span>
         </button>
 
         <button
@@ -291,7 +295,7 @@ export const UnitCommandHUD: React.FC<UnitCommandHUDProps> = ({
           title="Select all combat tanks"
         >
           <Shield className="w-3.5 h-3.5" />
-          <span className="font-medium">Military ({allUnits.filter((u) => u.type === 'military').length})</span>
+          <span className="font-medium">Military ({unitsList.filter((u) => u && u.type === 'military').length})</span>
         </button>
 
         <button
@@ -301,7 +305,7 @@ export const UnitCommandHUD: React.FC<UnitCommandHUDProps> = ({
           title="Select entire personnel"
         >
           <Users className="w-3.5 h-3.5" />
-          <span className="font-medium">All ({allUnits.length})</span>
+          <span className="font-medium">All ({unitsList.length})</span>
         </button>
 
         <div className="h-4 w-px bg-slate-700 mx-0.5" />

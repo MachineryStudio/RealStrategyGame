@@ -21,6 +21,7 @@ import {
   Achievement,
   CustomModelBlueprint,
   UnitEntity,
+  ThreatEntity,
   ResourceNode,
   ResourceCargo,
   KingdomDepositoryStats,
@@ -32,6 +33,7 @@ import confetti from 'canvas-confetti';
 import { GameHUD } from './components/GameHUD';
 import { BuildingBar } from './components/BuildingBar';
 import { Minimap } from './components/Minimap';
+import { DockPanel } from './components/DockPanel';
 import { ModelUploadModal } from './components/ModelUploadModal';
 import { AdminGodPanel } from './components/AdminGodPanel';
 import { QuestModal } from './components/QuestModal';
@@ -164,10 +166,12 @@ export default function App() {
   const [isMinimapOpen, setIsMinimapOpen] = useState(true);
   const [isCitadelOpen, setIsCitadelOpen] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
+  const [gameOverReason, setGameOverReason] = useState<'citadel_destroyed' | 'all_workers_fallen'>('all_workers_fallen');
 
   // Threats & Timers
   const [threatLevel, setThreatLevel] = useState<ThreatLevel>('low');
   const [activeThreatCount, setActiveThreatCount] = useState<number>(0);
+  const [activeThreats, setActiveThreats] = useState<ThreatEntity[]>([]);
   const [nextWaveTimer, setNextWaveTimer] = useState<number>(240); // 4 minutes
   const [godzillaWaveTimer, setGodzillaWaveTimer] = useState<number>(180); // 3 minutes periodic boss invasion
 
@@ -820,7 +824,9 @@ export default function App() {
       // 4. Update Threats & Turret Defenses
       if (engineRef.current) {
         const threats = engineRef.current.threatManager.threats;
-        setActiveThreatCount(threats.filter((t) => t.active).length);
+        const activeList = threats.filter((t) => t.active);
+        setActiveThreatCount(activeList.length);
+        setActiveThreats([...threats]);
 
         if (threats.length === 0) {
           setThreatLevel('low');
@@ -858,9 +864,24 @@ export default function App() {
           engineRef.current.workerManager.units,
           (bld, dmg) => {
             // Damage building
-            setPlacedBuildings((prev) =>
-              prev.map((b) => (b.instanceId === bld.instanceId ? { ...b, hp: Math.max(0, b.hp - dmg) } : b))
-            );
+            setPlacedBuildings((prev) => {
+              const updated = prev.map((b) => {
+                if (b.instanceId === bld.instanceId) {
+                  const newHp = Math.max(0, b.hp - dmg);
+                  // Check Citadel Destruction -> Game Over
+                  if (b.defId === 'mon_kingdom_house' && newHp <= 0 && !stateRef.current.isGodMode && !isGameOverRef.current) {
+                    setGameOverReason('citadel_destroyed');
+                    setIsGameOver(true);
+                    isGameOverRef.current = true;
+                    soundManager.playBuildingDestruction();
+                    soundManager.playGameOver();
+                  }
+                  return { ...b, hp: newHp, isOnFire: newHp < b.maxHp * 0.8 };
+                }
+                return b;
+              });
+              return updated;
+            });
           },
           (defeatedThreat) => {
             // Threat Defeated celebration
@@ -870,6 +891,15 @@ export default function App() {
             if (defeatedThreat.type === 'mafia') unlockAchievement('ach_mafia_buster');
             if (defeatedThreat.type === 'fire') unlockAchievement('ach_fire_fighter');
             if (defeatedThreat.type === 'godzilla') unlockAchievement('ach_godzilla_slayer');
+          },
+          (unit, dmg) => {
+            // Damage worker, pet, or specialist unit
+            if (engineRef.current) {
+              const died = engineRef.current.workerManager.damageUnit(unit.id, dmg);
+              if (died) {
+                setAllUnits([...engineRef.current.workerManager.units]);
+              }
+            }
           }
         );
 
@@ -880,10 +910,11 @@ export default function App() {
         const currentUnits = engineRef.current.workerManager.units;
         setAllUnits([...currentUnits]);
 
-        // Check for Game Over: If all workers are eliminated
-        const remainingWorkers = currentUnits.filter((u) => u.type === 'worker').length;
+        // Check for Game Over: If all workers & specialists are eliminated
+        const remainingWorkers = currentUnits.filter((u) => u.type === 'worker' || u.type === 'nurse' || u.type === 'architect' || u.type === 'veterinarian').length;
         if (gameStartedRef.current && !stateRef.current.isGodMode && !isGameOverRef.current) {
           if (remainingWorkers === 0) {
+            setGameOverReason('all_workers_fallen');
             setIsGameOver(true);
             isGameOverRef.current = true;
             soundManager.playGameOver();
@@ -979,7 +1010,7 @@ export default function App() {
     engineRef.current.threatManager.spawnThreat(picked);
   };
 
-  const handleDeployUnit = (type: 'fire_truck' | 'police' | 'engineer' | 'military' | 'medic' | 'worker' | 'dog' | 'cat' | 'robot') => {
+  const handleDeployUnit = (type: any) => {
     if (!engineRef.current) return;
     
     // Resource costs
@@ -990,6 +1021,9 @@ export default function App() {
 
     if (type === 'military') moneyCost = 100;
     else if (type === 'worker') { moneyCost = 50; woodCost = 10; }
+    else if (type === 'nurse' || type === 'medic') { moneyCost = 70; woodCost = 10; }
+    else if (type === 'veterinarian') { moneyCost = 75; woodCost = 15; }
+    else if (type === 'architect' || type === 'engineer') { moneyCost = 85; steelCost = 15; concreteCost = 10; }
     else if (type === 'dog') { moneyCost = 75; woodCost = 15; }
     else if (type === 'cat') { moneyCost = 80; steelCost = 10; }
     else if (type === 'robot') { moneyCost = 150; steelCost = 20; concreteCost = 10; }
@@ -1002,7 +1036,7 @@ export default function App() {
         resources.concrete < concreteCost
       ) {
         soundManager.playWarningBuzzer();
-        showPlacementWarning(`⚠️ Cannot recruit ${type.toUpperCase()}: Insufficient resources!`);
+        showPlacementWarning(`⚠️ Cannot recruit ${String(type).toUpperCase()}: Insufficient resources!`);
         return;
       }
 
@@ -1018,6 +1052,9 @@ export default function App() {
     if (type === 'dog') soundManager.playDogBark();
     else if (type === 'cat') soundManager.playCatMeow();
     else if (type === 'robot') soundManager.playRobotBeep();
+    else if (type === 'nurse' || type === 'medic') soundManager.playHealSound();
+    else if (type === 'veterinarian') soundManager.playHealSound();
+    else if (type === 'architect' || type === 'engineer') soundManager.playRepairSound();
     else soundManager.playClick();
 
     if (type === 'worker') {
@@ -1065,6 +1102,7 @@ export default function App() {
 
     // 5. Reset Game Over state
     setIsGameOver(false);
+    setGameOverReason('all_workers_fallen');
     isGameOverRef.current = false;
     soundManager.playVictoryFanfare();
     engineRef.current.spawnFloatingResourcePopup(
@@ -1602,6 +1640,8 @@ export default function App() {
       <CitadelInspectorModal
         isOpen={isCitadelOpen}
         onClose={() => setIsCitadelOpen(false)}
+        building={placedBuildings.find((b) => b && b.defId === 'mon_kingdom_house')}
+        citadelDef={definitions.find((d) => d && d.id === 'mon_kingdom_house')}
         kingdomStats={kingdomStats}
         resources={resources}
         units={allUnits}
@@ -1630,13 +1670,45 @@ export default function App() {
         }}
       />
 
-      {/* Game Over Modal when all workers fall */}
+      {/* Dock Panel (Collapsible to bottom, left, or right with unit/pet/building HP monitors & minimap) */}
+      <DockPanel
+        buildings={placedBuildings}
+        definitions={definitions}
+        units={allUnits}
+        threats={activeThreats}
+        resources={resources}
+        isGodMode={isGodMode}
+        onFocusEntity={(x, z) => {
+          if (engineRef.current) {
+            engineRef.current.controls.target.set(x, 0, z);
+            engineRef.current.camera.position.set(x + 14, 18, z + 18);
+          }
+        }}
+        onSelectUnit={(id) => {
+          const unit = allUnits.find((u) => u.id === id);
+          if (unit) {
+            setSelectedUnits([unit]);
+            if (engineRef.current) {
+              engineRef.current.controls.target.set(unit.x, 0, unit.z);
+              engineRef.current.camera.position.set(unit.x + 14, 18, unit.z + 18);
+            }
+          }
+        }}
+        onSpawnUnit={handleDeployUnit}
+        onOpenCitadel={() => setIsCitadelOpen(true)}
+      />
+
+      {/* Game Over Modal when Citadel is destroyed or all workers fall */}
       <GameOverModal
         isOpen={isGameOver}
+        reason={gameOverReason}
         stats={stats}
+        buildings={placedBuildings}
         resources={resources}
         onRestartKingdom={handleRestartKingdom}
+        onRestart={handleRestartKingdom}
         onLoadLastSave={handleLoadCity}
+        onLoadSave={handleLoadCity}
       />
     </div>
   );

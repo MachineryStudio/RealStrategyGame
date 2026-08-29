@@ -19,22 +19,33 @@ import { soundManager } from '../audio/soundManager';
 
 interface GameOverModalProps {
   isOpen: boolean;
-  stats: GameStats;
-  buildings: PlacedBuilding[];
-  onRestart: () => void;
-  onLoadSave: () => void;
+  stats?: GameStats;
+  buildings?: PlacedBuilding[];
+  resources?: any;
+  reason?: 'citadel_destroyed' | 'all_workers_fallen';
+  onRestart?: () => void;
+  onRestartKingdom?: () => void;
+  onLoadSave?: () => void;
+  onLoadLastSave?: () => void;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
   isOpen,
-  stats,
-  buildings,
+  stats = { daysElapsed: 1, threatsDefeated: 0, population: 4, buildingsCount: 0, resourcesGathered: 0 },
+  buildings = [],
+  reason = 'all_workers_fallen',
   onRestart,
+  onRestartKingdom,
   onLoadSave,
+  onLoadLastSave,
 }) => {
   if (!isOpen) return null;
 
-  const standingBuildings = buildings.filter((b) => b.isConstructed && b.hp > 0).length;
+  const handleRestart = onRestart || onRestartKingdom || (() => {});
+  const handleLoadSave = onLoadSave || onLoadLastSave || (() => {});
+
+  const standingBuildings = (buildings || []).filter((b) => b && b.isConstructed && b.hp > 0).length;
+  const isCitadelFallen = reason === 'citadel_destroyed';
 
   return (
     <div
@@ -44,18 +55,20 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
       <div className="relative w-full max-w-lg bg-slate-950 border-2 border-red-600 rounded-3xl shadow-2xl shadow-red-600/30 overflow-hidden flex flex-col p-6 text-center space-y-5">
         {/* Skull & Warning Icon */}
         <div className="mx-auto w-16 h-16 rounded-3xl bg-red-950/80 border-2 border-red-500/80 flex items-center justify-center text-red-400 shadow-xl shadow-red-600/40 animate-pulse">
-          <Skull className="w-8 h-8" />
+          {isCitadelFallen ? <Flame className="w-8 h-8 text-amber-400" /> : <Skull className="w-8 h-8" />}
         </div>
 
         <div>
           <span className="px-3 py-1 rounded-full bg-red-950/80 text-red-400 border border-red-500/50 text-xs font-mono font-bold tracking-widest uppercase">
-            GAME OVER &bull; CITIZENRY WIPED OUT
+            {isCitadelFallen ? 'GAME OVER • CITADEL DESTROYED' : 'GAME OVER • CITIZENRY WIPED OUT'}
           </span>
           <h2 className="text-2xl font-black text-white mt-2 tracking-wide uppercase">
-            ALL WORKERS HAVE FALLEN
+            {isCitadelFallen ? 'THE CITADEL OF SHARD HARBOR HAS FALLEN' : 'ALL WORKERS HAVE FALLEN'}
           </h2>
           <p className="text-xs text-red-200/80 mt-1 max-w-sm mx-auto leading-relaxed">
-            The Kaiju and hostile monsters overwhelmed the settlement defenses. With no surviving workers left to maintain or construct the kingdom, the city has fallen into ruin.
+            {isCitadelFallen
+              ? 'The Kingdom Citadel at the heart of Shard Harbor was completely demolished by Godzilla & Kaiju attacks. Without the central command & depository, the harbor has crumbled into oblivion.'
+              : 'The Kaiju and hostile monsters overwhelmed the settlement defenses. With no surviving workers left to maintain or construct the kingdom, the city has fallen into ruin.'}
           </p>
         </div>
 
@@ -98,7 +111,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
           <button
             id="btn_restart_kingdom"
-            onClick={onRestart}
+            onClick={handleRestart}
             className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-sm shadow-lg shadow-red-600/30 flex items-center justify-center gap-2 transition active:scale-95"
           >
             <RotateCcw className="w-4 h-4" />
@@ -107,7 +120,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
           <button
             id="btn_load_last_save"
-            onClick={onLoadSave}
+            onClick={handleLoadSave}
             className="py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-sm transition"
           >
             Load Last Save

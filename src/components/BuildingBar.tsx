@@ -37,11 +37,11 @@ interface BuildingBarProps {
 }
 
 export const BuildingBar: React.FC<BuildingBarProps> = ({
-  definitions,
+  definitions = [],
   selectedDef,
-  resources,
-  isGodMode,
-  isDemolishMode,
+  resources = { money: 0, wood: 0, steel: 0, concrete: 0, glass: 0, electronics: 0 },
+  isGodMode = false,
+  isDemolishMode = false,
   onSelectBuilding,
   onCannotAfford,
   onToggleDemolish,
@@ -59,7 +59,7 @@ export const BuildingBar: React.FC<BuildingBarProps> = ({
     { id: 'custom', label: 'Custom 3D', icon: <Sparkles className="w-4 h-4 text-cyan-400" /> },
   ];
 
-  const filteredBuildings = definitions.filter((b) => b.category === activeCategory);
+  const filteredBuildings = (definitions || []).filter((b) => b && b.category === activeCategory);
 
   const getMissingCostSummary = (def: BuildingDefinition) => {
     if (isGodMode) return { canAfford: true, missingText: '' };

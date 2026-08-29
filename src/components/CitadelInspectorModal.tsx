@@ -21,19 +21,23 @@ import {
   Radio,
   Plus,
   Compass,
+  HeartPulse,
+  Stethoscope,
 } from 'lucide-react';
 import { soundManager } from '../audio/soundManager';
 
 interface CitadelInspectorModalProps {
   isOpen: boolean;
   onClose: () => void;
-  building: PlacedBuilding | null;
-  citadelDef: BuildingDefinition | null;
+  building?: PlacedBuilding | null;
+  citadelDef?: BuildingDefinition | null;
   units: UnitEntity[];
   resources: GameResources;
   kingdomStats: KingdomDepositoryStats;
   isGodMode: boolean;
-  onSpawnUnit: (type: 'worker' | 'dog' | 'cat' | 'robot' | 'military' | 'fire_truck' | 'police') => void;
+  onSpawnUnit: (type: any) => void;
+  onUpgradeDepositoryTier?: () => void;
+  onFocusCitadel?: () => void;
 }
 
 export const CitadelInspectorModal: React.FC<CitadelInspectorModalProps> = ({
@@ -41,18 +45,24 @@ export const CitadelInspectorModal: React.FC<CitadelInspectorModalProps> = ({
   onClose,
   building,
   citadelDef,
-  units,
-  resources,
+  units = [],
+  resources = { money: 0, wood: 0, steel: 0, concrete: 0, glass: 0, electronics: 0 },
   kingdomStats,
-  isGodMode,
+  isGodMode = false,
   onSpawnUnit,
+  onUpgradeDepositoryTier,
+  onFocusCitadel,
 }) => {
-  if (!isOpen || !building) return null;
+  if (!isOpen) return null;
 
-  const workersCount = units.filter((u) => u.type === 'worker').length;
-  const dogsCount = units.filter((u) => u.type === 'dog').length;
-  const catsCount = units.filter((u) => u.type === 'cat').length;
-  const robotsCount = units.filter((u) => u.type === 'robot').length;
+  const unitList = units || [];
+  const workersCount = unitList.filter((u) => u && u.type === 'worker').length;
+  const nursesCount = unitList.filter((u) => u && (u.type === 'nurse' || u.type === 'medic')).length;
+  const vetsCount = unitList.filter((u) => u && u.type === 'veterinarian').length;
+  const architectsCount = unitList.filter((u) => u && (u.type === 'architect' || u.type === 'engineer')).length;
+  const dogsCount = unitList.filter((u) => u && u.type === 'dog').length;
+  const catsCount = unitList.filter((u) => u && u.type === 'cat').length;
+  const robotsCount = unitList.filter((u) => u && u.type === 'robot').length;
 
   const recruitOptions = [
     {
@@ -66,6 +76,42 @@ export const CitadelInspectorModal: React.FC<CitadelInspectorModalProps> = ({
       hp: 120,
       speed: 4.2,
       count: workersCount,
+    },
+    {
+      type: 'nurse' as const,
+      name: 'Field Response Nurse',
+      desc: 'Dedicated medic that automatically rushes to heal injured human workers, builders, and citizens.',
+      cost: { money: 70, wood: 10, steel: 0, concrete: 0 },
+      icon: <HeartPulse className="w-5 h-5 text-rose-400" />,
+      tag: 'Heals Workers & Citizens',
+      tagColor: 'bg-rose-950/60 text-rose-300 border-rose-500/40',
+      hp: 160,
+      speed: 4.8,
+      count: nursesCount,
+    },
+    {
+      type: 'veterinarian' as const,
+      name: 'Harbor Veterinarian',
+      desc: 'Animal and pet healthcare specialist. Autonomously seeks and treats injured guard dogs, sentinel cats, and bots.',
+      cost: { money: 75, wood: 15, steel: 0, concrete: 0 },
+      icon: <Stethoscope className="w-5 h-5 text-teal-400" />,
+      tag: 'Heals Pets & Guard Dogs',
+      tagColor: 'bg-teal-950/60 text-teal-300 border-teal-500/40',
+      hp: 170,
+      speed: 5.0,
+      count: vetsCount,
+    },
+    {
+      type: 'architect' as const,
+      name: 'Master Architect',
+      desc: 'Structural engineer that rapidly repairs damaged buildings and Citadel, putting out fires.',
+      cost: { money: 85, wood: 0, steel: 15, concrete: 10 },
+      icon: <Wrench className="w-5 h-5 text-sky-400" />,
+      tag: 'Repairs Buildings & Citadel',
+      tagColor: 'bg-sky-950/60 text-sky-300 border-sky-500/40',
+      hp: 180,
+      speed: 4.6,
+      count: architectsCount,
     },
     {
       type: 'dog' as const,
@@ -115,7 +161,7 @@ export const CitadelInspectorModal: React.FC<CitadelInspectorModalProps> = ({
     );
   };
 
-  const handleTrain = (type: 'worker' | 'dog' | 'cat' | 'robot') => {
+  const handleTrain = (type: any) => {
     const opt = recruitOptions.find((o) => o.type === type);
     if (!opt) return;
     if (!canAfford(opt.cost)) {
@@ -125,6 +171,9 @@ export const CitadelInspectorModal: React.FC<CitadelInspectorModalProps> = ({
     if (type === 'dog') soundManager.playDogBark();
     else if (type === 'cat') soundManager.playCatMeow();
     else if (type === 'robot') soundManager.playRobotBeep();
+    else if (type === 'nurse') soundManager.playHealSound();
+    else if (type === 'veterinarian') soundManager.playHealSound();
+    else if (type === 'architect') soundManager.playRepairSound();
     else soundManager.playUnitOrder();
 
     onSpawnUnit(type);
@@ -191,7 +240,7 @@ export const CitadelInspectorModal: React.FC<CitadelInspectorModalProps> = ({
             <div className="flex flex-col">
               <span className="text-[10px] uppercase font-mono text-slate-400">Citadel Armor</span>
               <span className="text-sm font-bold text-slate-200">
-                {building.hp} / {building.maxHp} HP
+                {building ? `${building.hp ?? 6000} / ${building.maxHp ?? 6000} HP` : '6000 / 6000 HP'}
               </span>
             </div>
           </div>
